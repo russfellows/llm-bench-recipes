@@ -59,7 +59,7 @@ chmod 1777 "$HF_HOME_PATH"
 PROFILE="/etc/profile.d/huggingface.sh"
 log "Writing $PROFILE ..."
 cat >"$PROFILE" <<'EOF'
-# Managed by gpu-setup: scripts/common/setup_hf_env.sh
+# Managed by llm-bench-recipes: scripts/common/setup_hf_env.sh
 # Hugging Face caches and downloads land on bulk storage, not the root FS.
 export HF_HOME="/mnt/data/huggingface"
 export HUGGINGFACE_HUB_CACHE="$HF_HOME/hub"

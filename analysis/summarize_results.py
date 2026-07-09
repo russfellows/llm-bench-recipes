@@ -9,7 +9,7 @@
 Summarize a benchmark sweep's results directory (or its .tgz archive) into
 a single Excel workbook.
 
-Reads the standard gpu-setup results layout (see recipes/README.md):
+Reads the standard llm-bench-recipes results layout (see recipes/README.md):
 
     <results_dir>/
         provenance.json
@@ -261,11 +261,11 @@ def build_run_info_sheet(ws: Worksheet, prov: dict) -> None:
     add("system.gpus.amd", "\n".join(gpus.get("amd") or []) if gpus.get("amd") else "")
     add("system.gpus.lspci", "\n".join(gpus.get("lspci") or []))
 
-    repo = prov.get("gpu_setup_repo") or {}
-    add("gpu_setup_repo.path", repo.get("path"))
-    add("gpu_setup_repo.commit", repo.get("commit"))
-    add("gpu_setup_repo.short", repo.get("short"))
-    add("gpu_setup_repo.dirty", repo.get("dirty"))
+    repo = prov.get("llm_bench_recipes_repo") or {}
+    add("llm_bench_recipes_repo.path", repo.get("path"))
+    add("llm_bench_recipes_repo.commit", repo.get("commit"))
+    add("llm_bench_recipes_repo.short", repo.get("short"))
+    add("llm_bench_recipes_repo.dirty", repo.get("dirty"))
 
     ws.column_dimensions["A"].width = 26
     ws.column_dimensions["B"].width = 90
@@ -300,7 +300,7 @@ def main() -> int:
     if not args.input.exists():
         sys.exit(f"Input not found: {args.input}")
 
-    with tempfile.TemporaryDirectory(prefix="gpu-setup-results-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="llm-bench-recipes-results-") as tmp:
         extracted_root = extract_if_archive(args.input, Path(tmp))
         results_dir = find_results_dir(extracted_root)
 

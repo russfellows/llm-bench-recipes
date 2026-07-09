@@ -23,7 +23,7 @@ Excel workbook:
   ...) instead of a single combined sheet — the now-redundant `tp` column
   is dropped from each per-TP sheet.
 - **Run Info** — flattened `provenance.json`: model, vendor, image ref,
-  GPU inventory, host info, and the `gpu-setup` git commit the sweep ran at.
+  GPU inventory, host info, and the `llm-bench-recipes` git commit the sweep ran at.
 - **Recipe TOML** — the exact `recipe.toml` snapshot captured at run time.
 
 Self-contained `uv run --script` — no project venv needed:

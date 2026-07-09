@@ -123,7 +123,7 @@ each request's ISL and OSL are drawn independently and uniformly from
 samples individual prompts between 819 and 1229 tokens. Ratio must be in
 `[0, 1)`; `0` (vLLM's own default) means every request uses the nominal
 ISL/OSL exactly. This repo's own `bench_openai.py` (used when `bench_tool =
-"openai"`) implements this exact convention as of `gpu-setup` 0.3.0 —
+"openai"`) implements this exact convention as of `llm-bench-recipes` 0.3.0 —
 earlier versions had a distinct, incorrect one-sided formula. ATOM's own
 bench client uses a different, below-target-only convention
 (`[target*ratio, target]`) that this harness does not control or alter —
@@ -219,7 +219,7 @@ When a variant needs a customised image (e.g. to bake in a tuning CSV):
 [variants.amd_vllm.build]
 dockerfile = "Dockerfile.amd_vllm"   # relative to the recipe directory
 context    = "."
-tag        = "gpu-setup/my-model-amd:local"
+tag        = "llm-bench-recipes/my-model-amd:local"
 build_args = { BASE_IMAGE = "vllm/vllm-openai-rocm:nightly-<digest>" }
 ```
 

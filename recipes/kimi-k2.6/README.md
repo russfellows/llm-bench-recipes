@@ -49,7 +49,7 @@ Override per-run:
 ## How the AMD image is built
 
 The first time `amd_vllm` runs, the harness builds
-`gpu-setup/vllm-rocm-kimi-k2-6-mxfp4:local` from
+`llm-bench-recipes/vllm-rocm-kimi-k2-6-mxfp4:local` from
 [Dockerfile.amd_vllm](Dockerfile.amd_vllm). The Dockerfile pins:
 
 - Base image: `vllm/vllm-openai-rocm:nightly-04c2a8deac44fdb1ca3e2b5ec3e6bf16f3f6a914`

@@ -1,6 +1,6 @@
 # Archive — original drafts
 
-These three markdown files were the seed material for `gpu-setup`. They are
+These three markdown files were the seed material for `llm-bench-recipes`. They are
 preserved as a historical reference. The current, fixed scripts live under
 [`../../scripts/`](../../scripts/) and are dispatched by
 [`../../bootstrap.sh`](../../bootstrap.sh).

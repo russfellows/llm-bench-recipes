@@ -185,7 +185,7 @@ run_sweep() {
   # later use site.
   local RECIPE_MOUNT_DIR="/recipe"
   if [ "$NATIVE" = "1" ] && [ "$DRY_RUN" != "1" ]; then
-    RECIPE_MOUNT_DIR="$(mktemp -d /tmp/gpu-setup-recipe.XXXXXX)"
+    RECIPE_MOUNT_DIR="$(mktemp -d /tmp/llm-bench-recipes-recipe.XXXXXX)"
   fi
 
   IFS=$' \t\n' read -r -a _TP_ARR    <<< "$SWEEP_TP"

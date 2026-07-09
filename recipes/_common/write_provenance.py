@@ -87,8 +87,8 @@ def gpu_summary() -> dict:
     return out
 
 
-def gpu_setup_repo_info() -> dict:
-    # The "gpu-setup" working tree root — three levels up from this file.
+def llm_bench_recipes_repo_info() -> dict:
+    # The "llm-bench-recipes" working tree root — three levels up from this file.
     repo = Path(__file__).resolve().parents[2]
     if not (repo / ".git").is_dir():
         return {"path": str(repo), "git": None}
@@ -164,7 +164,7 @@ def main() -> int:
                               "grep -E '^(NAME|VERSION_ID|PRETTY_NAME)=' /etc/os-release | tr -d '\"'"]).splitlines(),
             "gpus":       gpu_summary(),
         },
-        "gpu_setup_repo": gpu_setup_repo_info(),
+        "llm_bench_recipes_repo": llm_bench_recipes_repo_info(),
         "recipe_toml":    recipe_toml_content,
     }
 

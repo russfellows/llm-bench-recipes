@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers for gpu-setup scripts.
+# Shared helpers for llm-bench-recipes scripts.
 # Source this file:  source "$(dirname "$0")/../lib/common.sh"
 
 set -euo pipefail

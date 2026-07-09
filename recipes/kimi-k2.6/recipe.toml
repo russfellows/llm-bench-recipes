@@ -75,7 +75,7 @@ VLLM_ROCM_DISABLE_ATTENTION_LINEAR_LAYER_DYNAMIC_MXFP4_QUANT = "1"
 [variants.amd_vllm.build]
 dockerfile = "Dockerfile.amd_vllm"
 context    = "."
-tag        = "gpu-setup/vllm-rocm-kimi-k2-6-mxfp4:local"
+tag        = "llm-bench-recipes/vllm-rocm-kimi-k2-6-mxfp4:local"
 
 
 # ----- AMD / vLLM on a floating nightly base --------------------------------
@@ -127,7 +127,7 @@ VLLM_ROCM_DISABLE_ATTENTION_LINEAR_LAYER_DYNAMIC_MXFP4_QUANT = "1"
 [variants.amd_vllm_nightly.build]
 dockerfile = "Dockerfile.amd_vllm"
 context    = "."
-tag        = "gpu-setup/vllm-rocm-kimi-k2-6-mxfp4-nightly:local"
+tag        = "llm-bench-recipes/vllm-rocm-kimi-k2-6-mxfp4-nightly:local"
 build_args = { BASE_IMAGE = "rocm/vllm-dev:nightly_main" }
 
 
@@ -180,7 +180,7 @@ VLLM_ROCM_DISABLE_ATTENTION_LINEAR_LAYER_DYNAMIC_MXFP4_QUANT = "1"
 [variants.amd_vllm_quark.build]
 dockerfile = "Dockerfile.amd_vllm"
 context    = "."
-tag        = "gpu-setup/vllm-rocm-kimi-k2-6-mxfp4-quark:local"
+tag        = "llm-bench-recipes/vllm-rocm-kimi-k2-6-mxfp4-quark:local"
 build_args = { BASE_IMAGE = "rocm/vllm-dev:nightly_main", WITH_AMD_QUARK = "1" }
 
 

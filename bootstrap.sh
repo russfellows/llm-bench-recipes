@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# gpu-setup bootstrap
+# llm-bench-recipes bootstrap
 #
 # Detects installed GPUs via lspci, prints a plan, and (with --yes) runs:
 #   1. scripts/common/setup_prereqs.sh

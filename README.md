@@ -1,4 +1,4 @@
-# gpu-setup
+# llm-bench-recipes
 
 A reproducible LLM inference benchmarking harness — TOML-driven sweeps
 across serving stacks (vLLM, ATOM, TensorRT-LLM) and vendors (AMD, NVIDIA),
@@ -194,7 +194,7 @@ The workbook has three sheets:
   bench-client JSON (throughput, TTFT/TPOT/ITL/E2E latency percentiles, token
   counts, etc.), sorted numerically with a frozen header row and autofilter.
 - **Run Info** — flattened `provenance.json`: model, vendor, image ref, GPU
-  inventory, host info, and the `gpu-setup` git commit the sweep ran at.
+  inventory, host info, and the `llm-bench-recipes` git commit the sweep ran at.
 - **Recipe TOML** — the exact `recipe.toml` snapshot captured at run time.
 
 ```bash
@@ -271,8 +271,8 @@ the scripts skip reinstall rather than risk breaking a working cloud image.
 ### Bootstrap
 
 ```bash
-git clone https://github.com/russfellows/gpu-setup.git
-cd gpu-setup
+git clone https://github.com/russfellows/llm-bench-recipes.git
+cd llm-bench-recipes
 
 # 1. Dry-run: shows what was detected and the planned steps.
 sudo ./bootstrap.sh
