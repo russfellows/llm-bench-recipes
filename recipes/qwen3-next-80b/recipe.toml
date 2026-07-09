@@ -1,0 +1,222 @@
+# Recipe: Qwen/Qwen3-Next-80B-A3B-Instruct-FP8
+#
+# 80B total / 3B active hybrid (GDN + MoE) model, FP8-quantized.
+# Three variants: vLLM on AMD, ATOM on AMD, vLLM on NVIDIA.
+#
+# NUMA pinning is intentionally NOT set here — it's host-topology specific.
+# See README.md for how to add cpuset-cpus / cpuset-mems via either an
+# edit to docker_flags below or via environment.
+
+[recipe]
+model_name  = "qwen3-next-80b"
+model_id    = "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8"
+description = "Qwen3-Next 80B-A3B-Instruct-FP8 (80B total / 3B active, hybrid GDN+MoE)"
+
+[recipe.defaults]
+# Default sweep covers TP 1/2/4 across these shapes.
+sweep_tp           = [1, 2, 4]
+sweep_isl_osl      = ["1000,100", "5000,500", "10000,1000"]
+sweep_conc         = [4, 8, 16, 32, 64, 128, 256]
+random_range_ratio = 0.9
+ready_timeout_s    = 1800
+
+
+# ----- AMD / vLLM ------------------------------------------------------------
+#
+# Pinned vLLM-rocm nightly. `--async-scheduling` is the default here because
+# it's required for TP>1 and TP>1 is the common case for an 80B model. If
+# you sweep TP=1 specifically, switch to --no-async-scheduling (see README).
+[variants.amd_vllm]
+vendor  = "amd"
+stack   = "vllm"
+image   = "vllm/vllm-openai-rocm:nightly-04c2a8deac44fdb1ca3e2b5ec3e6bf16f3f6a914"
+port    = 8000
+
+server_entrypoint = "vllm serve"
+server_args = [
+  "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--attention-backend", "ROCM_AITER_UNIFIED_ATTN",
+  "--kv-cache-dtype", "fp8",
+  "--max-model-len", "101000",
+  "--max-num-seqs", "256",
+  "--gpu-memory-utilization", "0.8",
+  "--no-enable-prefix-caching",
+  "--async-scheduling",
+  "--safetensors-load-strategy", "prefetch",
+  "--compilation-config",
+  '{"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["-rms_norm","-silu_and_mul","-quant_fp8"],"pass_config":{"fuse_norm_quant":true,"fuse_allreduce_rms":false}}',
+]
+
+[variants.amd_vllm.env]
+SAFETENSORS_FAST_GPU                       = "1"
+VLLM_ROCM_USE_AITER                        = "1"
+VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS  = "1"
+VLLM_ROCM_USE_AITER_MHA                    = "0"
+VLLM_ROCM_AITER_MOE_DISPATCH_POLICY        = "2"
+VLLM_ROCM_QUICK_REDUCE_QUANTIZATION        = "INT4"
+AITER_USE_OPUS_MOE_SORTING                 = "0"
+VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS         = "1800"
+
+
+# ----- AMD / vLLM with NUMA pinning (reference configuration) ----------------
+#
+# Same image and server config as `amd_vllm`, but locked to TP=4 with NUMA
+# pinning for a dual-socket MI355X reference host (GPUs 0–3 on NUMA 0,
+# GPUs 4–7 on NUMA 1). Use this on a host that matches that topology; on
+# any other host the cpuset values may mis-pin — verify with
+# `rocm-smi --showtopo` before relying on the results.
+[variants.amd_vllm_numa]
+vendor  = "amd"
+stack   = "vllm"
+image   = "vllm/vllm-openai-rocm:nightly-04c2a8deac44fdb1ca3e2b5ec3e6bf16f3f6a914"
+port    = 8000
+
+server_entrypoint = "vllm serve"
+server_args = [
+  "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--attention-backend", "ROCM_AITER_UNIFIED_ATTN",
+  "--kv-cache-dtype", "fp8",
+  "--max-model-len", "101000",
+  "--max-num-seqs", "256",
+  "--gpu-memory-utilization", "0.8",
+  "--no-enable-prefix-caching",
+  "--async-scheduling",
+  "--safetensors-load-strategy", "prefetch",
+  "--compilation-config",
+  '{"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["-rms_norm","-silu_and_mul","-quant_fp8"],"pass_config":{"fuse_norm_quant":true,"fuse_allreduce_rms":false}}',
+]
+
+# NUMA pinning to NUMA node 0 (GPUs 0–3 on the reference host).
+docker_flags = [
+  "--cpuset-cpus=0-63,128-191",
+  "--cpuset-mems=0",
+]
+
+[variants.amd_vllm_numa.defaults]
+# Locked to TP=4 because the NUMA cpuset above targets the TP=4 GPU set
+# specifically. For TP=1 or TP=2 the reference cpuset is different — use
+# the `amd_vllm` variant and pass NUMA flags via EXTRA_DOCKER_FLAGS.
+sweep_tp = [4]
+
+[variants.amd_vllm_numa.env]
+SAFETENSORS_FAST_GPU                       = "1"
+VLLM_ROCM_USE_AITER                        = "1"
+VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS  = "1"
+VLLM_ROCM_USE_AITER_MHA                    = "0"
+VLLM_ROCM_AITER_MOE_DISPATCH_POLICY        = "2"
+VLLM_ROCM_QUICK_REDUCE_QUANTIZATION        = "INT4"
+AITER_USE_OPUS_MOE_SORTING                 = "0"
+VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS         = "1800"
+HIP_VISIBLE_DEVICES                        = "0,1,2,3"
+CUDA_VISIBLE_DEVICES                       = "0,1,2,3"
+
+
+# ----- AMD / ATOM ------------------------------------------------------------
+[variants.amd_atom]
+vendor  = "amd"
+stack   = "atom"
+image   = "rocm/atom-dev:vllm-v0.22.0-nightly_20260617"
+port    = 8000
+
+server_entrypoint = "python3 -m atom.entrypoints.openai_server"
+server_args = [
+  "--model", "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8",
+  "-tp", "@TP@",
+]
+
+
+# ----- NVIDIA / vLLM ---------------------------------------------------------
+# Max TP = 4. FP8 block quantization uses block_k=128; at TP=8 the weight
+# input_size_per_partition drops to 64 (< block_k), causing a ValueError on
+# startup. The recipe-level sweep_tp=[1,2,4] enforces this constraint.
+[variants.nvidia_vllm]
+vendor  = "nvidia"
+stack   = "vllm"
+image   = "vllm/vllm-openai:v0.22.1"
+port    = 8000
+
+server_entrypoint = "vllm serve"
+server_args = [
+  "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--kv-cache-dtype", "fp8",
+  "--max-model-len", "131072",
+  "--max-num-seqs", "256",
+  "--gpu-memory-utilization", "0.95",
+  "--no-enable-prefix-caching",
+  "--async-scheduling",
+  "--safetensors-load-strategy", "prefetch",
+  "--performance-mode", "throughput",
+  "--compilation-config",
+  '{"pass_config":{"fuse_allreduce_rms":true,"eliminate_noops":true}}',
+]
+
+[variants.nvidia_vllm.env]
+VLLM_CACHE_ROOT             = "${SHARED_ROOT}/vllm_cache"
+TORCHINDUCTOR_CACHE_DIR     = "${SHARED_ROOT}/torch_compile_cache"
+VLLM_USE_FLASHINFER_MOE_FP8 = "1"
+VLLM_FLASHINFER_MOE_BACKEND = "latency"
+VLLM_USE_DEEP_GEMM          = "0"
+
+
+# ----- NVIDIA / TensorRT-LLM --------------------------------------------------
+# Qwen3-Next's hybrid Gated-DeltaNet + MoE architecture is natively
+# supported by TRT-LLM's PyTorch backend as of 1.2.1
+# (tensorrt_llm._torch.models.modeling_qwen3_next.Qwen3NextForCausalLM,
+# matching this model's config.json `architectures` field exactly) — no
+# engine build step needed, same as the gpt-oss-120b nvidia_trtllm variant.
+#
+# Same TP<=4 ceiling as nvidia_vllm above: this checkpoint's FP8 block
+# quantization uses block_k=128, and at TP=8 the per-partition weight
+# dimension drops below that block size, which breaks the same way
+# regardless of serving stack.
+[variants.nvidia_trtllm]
+vendor  = "nvidia"
+stack   = "trtllm"
+image   = "nvcr.io/nvidia/tensorrt-llm/release:1.2.1"
+port    = 8000
+
+server_entrypoint = "trtllm-serve"
+server_args = [
+  "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--backend", "pytorch",
+  "--extra_llm_api_options", "@RECIPE_DIR@/runtime_config.json",
+  "--tp_size", "@TP@",
+  "--ep_size", "@TP@",
+  "--max_num_tokens", "15360",
+  "--max_seq_len", "15360",
+  "--max_batch_size", "256",
+]
+runtime_config_path = "@RECIPE_DIR@/runtime_config.json"
+
+[variants.nvidia_trtllm.defaults]
+sweep_tp = [1, 2, 4]
+
+[variants.nvidia_trtllm.runtime_config]
+enable_attention_dp = false
+enable_chunked_prefill = false
+num_postprocess_workers = 1
+print_iter_log = true
+stream_interval = 10
+
+[variants.nvidia_trtllm.runtime_config.cuda_graph_config]
+enable_padding = true
+max_batch_size = 256
+
+[variants.nvidia_trtllm.runtime_config.kv_cache_config]
+dtype = "auto"
+enable_block_reuse = false
+free_gpu_memory_fraction = 0.8
+
+[variants.nvidia_trtllm.runtime_config.moe_config]
+backend = "TRTLLM"

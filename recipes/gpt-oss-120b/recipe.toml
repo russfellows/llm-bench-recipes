@@ -1,0 +1,117 @@
+# Recipe: openai/gpt-oss-120b
+#
+# Three variants: AMD via ATOM, NVIDIA via TensorRT-LLM, NVIDIA via vLLM.
+# The vLLM variant was added for environments where TRT-LLM is unavailable
+# (e.g. running natively inside a container). Both NVIDIA variants serve an
+# OpenAI-compatible endpoint on port 8000 and are exercised by the
+# standard `vllm bench serve` client (ATOM variant uses its own
+# atom.benchmarks.benchmark_serving with the same flags).
+#
+# The TRT-LLM variant needs the LLM-API options that `trtllm-serve`
+# normally reads from a YAML file. They live below in
+# [variants.nvidia_trtllm.runtime_config]; the harness writes them as
+# JSON at run time and mounts that file into the container. JSON parses
+# fine with YAML loaders, so the repo stays YAML-free.
+
+[recipe]
+model_name  = "gpt-oss-120b"
+model_id    = "openai/gpt-oss-120b"
+description = "OpenAI GPT-OSS 120B"
+
+[recipe.defaults]
+sweep_tp       = [1, 2, 4, 8]
+sweep_isl_osl  = ["1024,1024", "1024,8192", "8192,1024"]
+sweep_conc     = [4, 8, 16, 32, 64, 128, 256]
+random_range_ratio = 0.8
+ready_timeout_s    = 1800
+
+
+# ----- NVIDIA / vLLM ---------------------------------------------------------
+[variants.nvidia_vllm]
+vendor  = "nvidia"
+stack   = "vllm"
+image   = "vllm/vllm-openai:v0.22.1"
+port    = 8000
+
+server_entrypoint = "vllm serve"
+server_args = [
+  "openai/gpt-oss-120b",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--kv-cache-dtype", "fp8",
+  "--max-model-len", "15360",
+  "--max-num-seqs", "256",
+  "--gpu-memory-utilization", "0.90",
+  "--safetensors-load-strategy", "prefetch",
+  "--compilation-config",
+  '{"pass_config":{"fuse_allreduce_rms":true,"eliminate_noops":true}}',
+]
+
+[variants.nvidia_vllm.env]
+TORCH_CUDA_ARCH_LIST    = "10.0"
+PYTHONNOUSERSITE        = "1"
+VLLM_CACHE_ROOT         = "${SHARED_ROOT}/vllm_cache"
+TORCHINDUCTOR_CACHE_DIR = "${SHARED_ROOT}/torch_compile_cache"
+
+
+# ----- AMD / ATOM ------------------------------------------------------------
+[variants.amd_atom]
+vendor  = "amd"
+stack   = "atom"
+image   = "rocm/atom:rocm7.2.2_ubuntu24.04_py3.12_pytorch_release_2.10.0_atom0.1.2.post"
+port    = 8000
+
+server_entrypoint = "python3 -m atom.entrypoints.openai_server"
+server_args = [
+  "--model", "openai/gpt-oss-120b",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--kv_cache_dtype", "fp8",
+  "--block-size", "16",
+  "--max-model-len", "15360",
+]
+
+
+# ----- NVIDIA / TensorRT-LLM -------------------------------------------------
+[variants.nvidia_trtllm]
+vendor  = "nvidia"
+stack   = "trtllm"
+image   = "nvcr.io/nvidia/tensorrt-llm/release:1.2.1"
+port    = 8000
+# trtllm-serve uses its own bench tool path, but the served endpoint is
+# OpenAI-compatible, so the vllm bench client works against it.
+server_entrypoint = "trtllm-serve"
+server_args = [
+  "openai/gpt-oss-120b",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--backend", "pytorch",
+  "--extra_llm_api_options", "@RECIPE_DIR@/runtime_config.json",
+  "--tp_size", "@TP@",
+  "--ep_size", "@TP@",
+  "--max_num_tokens", "15360",
+  "--max_seq_len", "15360",
+  "--max_batch_size", "256",
+]
+runtime_config_path = "@RECIPE_DIR@/runtime_config.json"
+
+[variants.nvidia_trtllm.runtime_config]
+enable_attention_dp = false
+enable_chunked_prefill = false
+num_postprocess_workers = 1
+print_iter_log = true
+stream_interval = 10
+
+[variants.nvidia_trtllm.runtime_config.cuda_graph_config]
+enable_padding = true
+max_batch_size = 256
+
+[variants.nvidia_trtllm.runtime_config.kv_cache_config]
+dtype = "auto"
+enable_block_reuse = false
+free_gpu_memory_fraction = 0.8
+
+[variants.nvidia_trtllm.runtime_config.moe_config]
+backend = "TRTLLM"

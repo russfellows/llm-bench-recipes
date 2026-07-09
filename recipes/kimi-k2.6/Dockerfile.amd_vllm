@@ -1,0 +1,32 @@
+# Custom vLLM-rocm image for Kimi-K2.6-MXFP4.
+#
+# Parameterized so multiple AMD variants share one Dockerfile:
+#   amd_vllm         — pinned base, AITER CSV patch          (default, reproducible)
+#   amd_vllm_nightly — rocm/vllm-dev:nightly_main + CSV      (AMD-recommended base)
+#   amd_vllm_quark   — nightly_main + CSV + amd-quark        (matches AMD's full guidance)
+#
+# Build args (defaults match the reproducible amd_vllm variant):
+#   BASE_IMAGE       Base image for FROM.
+#   AITER_COMMIT     Commit of ROCm/aiter to fetch the FP4 tuning CSV from.
+#   WITH_AMD_QUARK   "1" to clone amd-quark and pip install -e it.
+#   AMD_QUARK_REPO   Git URL for amd-quark (only used when WITH_AMD_QUARK=1).
+#   AMD_QUARK_REF    Git ref to check out (default: main).
+
+ARG BASE_IMAGE=vllm/vllm-openai-rocm:nightly-04c2a8deac44fdb1ca3e2b5ec3e6bf16f3f6a914
+FROM ${BASE_IMAGE}
+
+ARG AITER_COMMIT=78ef4be9d621e3660c89cfb611679fb12fe10ed4
+ARG AITER_CSV_DEST=/usr/local/lib/python3.12/dist-packages/aiter/configs/model_configs/kimik2_fp4_tuned_fmoe.csv
+ARG WITH_AMD_QUARK=0
+ARG AMD_QUARK_REPO=https://github.com/amd/quark
+ARG AMD_QUARK_REF=main
+
+RUN curl -fsSL \
+      "https://raw.githubusercontent.com/ROCm/aiter/${AITER_COMMIT}/aiter/configs/model_configs/kimik2_fp4_tuned_fmoe.csv" \
+      -o "${AITER_CSV_DEST}"
+
+RUN if [ "${WITH_AMD_QUARK}" = "1" ]; then \
+      set -e; \
+      git clone "${AMD_QUARK_REPO}" /opt/amd-quark; \
+      cd /opt/amd-quark && git checkout "${AMD_QUARK_REF}" && pip install --no-cache-dir -e .; \
+    fi

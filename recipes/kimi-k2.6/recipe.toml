@@ -1,0 +1,219 @@
+# Recipe: Kimi-K2.6 (MXFP4 on AMD, NVFP4 on NVIDIA)
+#
+# Both variants serve an OpenAI-compatible endpoint on port 8000 and are
+# driven by `vllm bench serve`. The AMD variant uses a locally-built image
+# (Dockerfile.amd_vllm) that patches the upstream vLLM-rocm nightly with
+# an updated AITER tuning CSV for this specific model.
+
+[recipe]
+model_name  = "kimi-k2.6"
+# AMD uses the MXFP4 quantization, NVIDIA uses NVFP4. Each variant
+# overrides model_id below via its own server_args.
+model_id    = "Kimi-K2.6"
+description = "Moonshot Kimi-K2.6 — MXFP4 (AMD) / NVFP4 (NVIDIA)"
+
+[recipe.defaults]
+sweep_tp           = [4, 8]
+sweep_isl_osl      = ["1024,1024", "1024,8192", "8192,1024"]
+sweep_conc         = [4, 8, 16, 32, 64, 128, 256]
+random_range_ratio = 0.8
+ready_timeout_s    = 3600
+
+
+# ----- AMD / vLLM (MXFP4) ----------------------------------------------------
+#
+# Built locally from Dockerfile.amd_vllm. The build pins both the base
+# vLLM-rocm nightly digest and the AITER commit it pulls the FP4 tuning
+# CSV from, so re-runs reproduce the same artifact.
+[variants.amd_vllm]
+vendor           = "amd"
+stack            = "vllm"
+model_id         = "amd/Kimi-K2.6-MXFP4"
+bench_extra_args = ["--trust-remote-code"]
+# `image` is the BASE image (used in the Dockerfile's FROM line); the
+# harness builds and tags the actual image per the [variants.amd_vllm.build]
+# block, then uses that tag.
+image   = "vllm/vllm-openai-rocm:nightly-04c2a8deac44fdb1ca3e2b5ec3e6bf16f3f6a914"
+port    = 8000
+
+server_entrypoint = "vllm serve"
+# max-model-len 16384 covers ISL+OSL up to 16k (e.g. 8192/8192). If you
+# sweep larger shapes, raise it. max-num-seqs 512 caps in-flight requests;
+# CONC values above 512 will queue.
+server_args = [
+  "amd/Kimi-K2.6-MXFP4",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--trust-remote-code",
+  "--max-model-len", "16384",
+  "--max-num-seqs", "512",
+  "--max-num-batched-tokens", "65536",
+  "--reasoning-parser", "kimi_k2",
+  "--tool-call-parser", "kimi_k2",
+  "--enable-auto-tool-choice",
+  "--gpu-memory-utilization", "0.9",
+  "--mm-encoder-tp-mode", "data",
+  "--attention-backend", "ROCM_AITER_MLA",
+  "--block-size", "1",
+  "--kv-cache-dtype", "fp8",
+  "--safetensors-load-strategy", "prefetch",
+  "--compilation-config",
+  '{"pass_config":{"fuse_allreduce_rms":true,"eliminate_noops":true,"fuse_rope_kvcache_cat_mla":true},"custom_ops":["none","+rms_norm"],"compile_ranges_endpoints":[64],"cudagraph_mode":"full_and_piecewise","use_inductor_graph_partition":true}',
+]
+
+[variants.amd_vllm.env]
+VLLM_ROCM_USE_AITER                                = "1"
+AMDGCN_USE_BUFFER_OPS                              = "1"
+VLLM_ROCM_USE_AITER_MLA_PS                         = "1"
+VLLM_ROCM_QUICK_REDUCE_QUANTIZATION                = "INT4"
+VLLM_ROCM_USE_SKINNY_GEMM                          = "0"
+VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS          = "1"
+VLLM_ROCM_USE_AITER_TUNED_UNQUANTISED_GEMM         = "1"
+VLLM_ROCM_DISABLE_ATTENTION_LINEAR_LAYER_DYNAMIC_MXFP4_QUANT = "1"
+
+[variants.amd_vllm.build]
+dockerfile = "Dockerfile.amd_vllm"
+context    = "."
+tag        = "gpu-setup/vllm-rocm-kimi-k2-6-mxfp4:local"
+
+
+# ----- AMD / vLLM on a floating nightly base --------------------------------
+# Same model and server flags as amd_vllm, but built on top of
+# rocm/vllm-dev:nightly_main — the base referenced by the model card.
+# Floating tag, so re-runs aren't bit-identical; see provenance.json for
+# the exact digest each run resolved to.
+[variants.amd_vllm_nightly]
+vendor           = "amd"
+stack            = "vllm"
+model_id         = "amd/Kimi-K2.6-MXFP4"
+bench_extra_args = ["--trust-remote-code"]
+image   = "rocm/vllm-dev:nightly_main"
+port    = 8000
+
+server_entrypoint = "vllm serve"
+server_args = [
+  "amd/Kimi-K2.6-MXFP4",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--trust-remote-code",
+  "--max-model-len", "16384",
+  "--max-num-seqs", "512",
+  "--max-num-batched-tokens", "65536",
+  "--reasoning-parser", "kimi_k2",
+  "--tool-call-parser", "kimi_k2",
+  "--enable-auto-tool-choice",
+  "--gpu-memory-utilization", "0.9",
+  "--mm-encoder-tp-mode", "data",
+  "--attention-backend", "ROCM_AITER_MLA",
+  "--block-size", "1",
+  "--kv-cache-dtype", "fp8",
+  "--safetensors-load-strategy", "prefetch",
+  "--compilation-config",
+  '{"pass_config":{"fuse_allreduce_rms":true,"eliminate_noops":true,"fuse_rope_kvcache_cat_mla":true},"custom_ops":["none","+rms_norm"],"compile_ranges_endpoints":[64],"cudagraph_mode":"full_and_piecewise","use_inductor_graph_partition":true}',
+]
+
+[variants.amd_vllm_nightly.env]
+VLLM_ROCM_USE_AITER                                = "1"
+AMDGCN_USE_BUFFER_OPS                              = "1"
+VLLM_ROCM_USE_AITER_MLA_PS                         = "1"
+VLLM_ROCM_QUICK_REDUCE_QUANTIZATION                = "INT4"
+VLLM_ROCM_USE_SKINNY_GEMM                          = "0"
+VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS          = "1"
+VLLM_ROCM_USE_AITER_TUNED_UNQUANTISED_GEMM         = "1"
+VLLM_ROCM_DISABLE_ATTENTION_LINEAR_LAYER_DYNAMIC_MXFP4_QUANT = "1"
+
+[variants.amd_vllm_nightly.build]
+dockerfile = "Dockerfile.amd_vllm"
+context    = "."
+tag        = "gpu-setup/vllm-rocm-kimi-k2-6-mxfp4-nightly:local"
+build_args = { BASE_IMAGE = "rocm/vllm-dev:nightly_main" }
+
+
+# ----- AMD / vLLM closest to the model-card build recipe --------------------
+# rocm/vllm-dev:nightly_main + amd-quark from source + the AITER CSV patch.
+# Useful when you want to reproduce the model-card build recipe as closely
+# as possible. Not reproducible over time: both the base image tag and the
+# amd-quark `main` ref move.
+[variants.amd_vllm_quark]
+vendor           = "amd"
+stack            = "vllm"
+model_id         = "amd/Kimi-K2.6-MXFP4"
+bench_extra_args = ["--trust-remote-code"]
+image   = "rocm/vllm-dev:nightly_main"
+port    = 8000
+
+server_entrypoint = "vllm serve"
+server_args = [
+  "amd/Kimi-K2.6-MXFP4",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--trust-remote-code",
+  "--max-model-len", "16384",
+  "--max-num-seqs", "512",
+  "--max-num-batched-tokens", "65536",
+  "--reasoning-parser", "kimi_k2",
+  "--tool-call-parser", "kimi_k2",
+  "--enable-auto-tool-choice",
+  "--gpu-memory-utilization", "0.9",
+  "--mm-encoder-tp-mode", "data",
+  "--attention-backend", "ROCM_AITER_MLA",
+  "--block-size", "1",
+  "--kv-cache-dtype", "fp8",
+  "--safetensors-load-strategy", "prefetch",
+  "--compilation-config",
+  '{"pass_config":{"fuse_allreduce_rms":true,"eliminate_noops":true,"fuse_rope_kvcache_cat_mla":true},"custom_ops":["none","+rms_norm"],"compile_ranges_endpoints":[64],"cudagraph_mode":"full_and_piecewise","use_inductor_graph_partition":true}',
+]
+
+[variants.amd_vllm_quark.env]
+VLLM_ROCM_USE_AITER                                = "1"
+AMDGCN_USE_BUFFER_OPS                              = "1"
+VLLM_ROCM_USE_AITER_MLA_PS                         = "1"
+VLLM_ROCM_QUICK_REDUCE_QUANTIZATION                = "INT4"
+VLLM_ROCM_USE_SKINNY_GEMM                          = "0"
+VLLM_ROCM_USE_AITER_FUSION_SHARED_EXPERTS          = "1"
+VLLM_ROCM_USE_AITER_TUNED_UNQUANTISED_GEMM         = "1"
+VLLM_ROCM_DISABLE_ATTENTION_LINEAR_LAYER_DYNAMIC_MXFP4_QUANT = "1"
+
+[variants.amd_vllm_quark.build]
+dockerfile = "Dockerfile.amd_vllm"
+context    = "."
+tag        = "gpu-setup/vllm-rocm-kimi-k2-6-mxfp4-quark:local"
+build_args = { BASE_IMAGE = "rocm/vllm-dev:nightly_main", WITH_AMD_QUARK = "1" }
+
+
+# ----- NVIDIA / vLLM (NVFP4) -------------------------------------------------
+[variants.nvidia_vllm]
+vendor           = "nvidia"
+stack            = "vllm"
+model_id         = "nvidia/Kimi-K2.6-NVFP4"
+image            = "vllm/vllm-openai:v0.21.0"
+port             = 8000
+bench_extra_args = ["--trust-remote-code"]
+
+server_entrypoint = "vllm serve"
+server_args = [
+  "nvidia/Kimi-K2.6-NVFP4",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--tensor-parallel-size", "@TP@",
+  "--trust-remote-code",
+  "--gpu-memory-utilization", "0.90",
+  "--max-model-len", "16384",
+  "--max-num-seqs", "512",
+  "--reasoning-parser", "kimi_k2",
+  "--tool-call-parser", "kimi_k2",
+  "--kv-cache-dtype", "fp8",
+  "--safetensors-load-strategy", "prefetch",
+  "--max-cudagraph-capture-size", "2048",
+  "--stream-interval", "20",
+  "--compilation-config", '{"pass_config":{"fuse_allreduce_rms":true}}',
+]
+
+[variants.nvidia_vllm.env]
+TORCH_CUDA_ARCH_LIST    = "10.0"
+PYTHONNOUSERSITE        = "1"
+VLLM_CACHE_ROOT         = "${SHARED_ROOT}/vllm_cache"
+TORCHINDUCTOR_CACHE_DIR = "${SHARED_ROOT}/torch_compile_cache"

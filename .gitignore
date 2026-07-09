@@ -1,0 +1,17 @@
+# Source documents that may contain proprietary content — never commit.
+*.docx
+*.doc
+*.pdf
+
+# Common cruft
+.DS_Store
+*.swp
+*~
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Per-run output (recipes write here when developing)
+results/
